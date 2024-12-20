@@ -3,17 +3,21 @@ import pandas as pd
 import re
 import os
 from langchain_huggingface import HuggingFaceEmbeddings
-import pandas as pd
 import numpy as np
 import faiss
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain.docstore.document import Document
+from markitdown import MarkItDown
+import json
+
+
 llm_client = OpenAI(
     base_url='http://localhost:8000/v1',
     api_key="EMPTY"
 )
 OUTPUT_DIR = 'output_docs'
+INPUT_DIR = 'input_docs'
 
 #model_name="deepvk/USER-bge-m3"
 model_name="sentence-transformers/paraphrase-xlm-r-multilingual-v1"
@@ -30,13 +34,29 @@ model = HuggingFaceEmbeddings(
 
 
 def parse_pdf():
-    pass
+    md = MarkItDown()
+    files = [f for f in os.listdir(INPUT_DIR) if os.path.isfile(os.path.join(INPUT_DIR, f))]
+
+    for i in files:
+        result = md.convert(f"{INPUT_DIR}/{i}")
+        with open(OUTPUT_DIR + '/' + i.replace('.pdf', '.md'), 'w') as f:
+            f.write(result.text_content)
 
 
-def chunk_split(data : dict) -> pd.DataFrame:
+def chunk_split() -> pd.DataFrame:
     chunks = {}
     files = [f for f in os.listdir(OUTPUT_DIR) if os.path.isfile(os.path.join(OUTPUT_DIR, f))]
-    pass
+    for i in files:
+        with open(OUTPUT_DIR + '/' + i, 'r') as file:
+            chunks[i] = file.read().split('')[1::]
+    rows = []
+    for source_file, chunk in chunks.items():
+        for chunk_text in chunk:
+            rows.append({'source_file': source_file, 'chunk_text': chunk_text})
+
+    df = pd.DataFrame(rows)
+    return df
+
 
 
 def preprocess_text(text):
@@ -109,7 +129,7 @@ def search_VB(query, k=10, threshold=0.87):
     faiss.normalize_L2(np.stack([embedded_query]))
     results = []
     best_score = -1
-    for doc, score in vector_store.similarity_search_with_score_by_vector(embedded_query, k=k):
+    for doc, score in vector_store.similarity_search_with_score_by_vector(embedded_query, k=k, fetch_k=k * 5):
         if best_score == -1:
             best_score = score
         if score < best_score * threshold:
@@ -117,6 +137,14 @@ def search_VB(query, k=10, threshold=0.87):
         print(score)
         results.append(doc)
     return results
+
+def vb_increment(path_to_doc : str, path_vb : str):
+    new_file_path = parse_pdf(path_to_doc)
+    
+def vb_rebuild():
+    parse_pdf()
+    df = dataframe_preprocess(chunk_split())
+    VB_build()
 
 
 def dump_to_json(x: Document, i: int):

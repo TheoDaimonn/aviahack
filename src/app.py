@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query
 from typing import List
 
-from vector_db import search_VB, dump_to_json
+from vector_db import search_VB, dump_to_json, vb_rebuild
 app = FastAPI()
 
 @app.get("/search")
@@ -16,5 +16,12 @@ def search_endpoint(
         if not documents:
             raise HTTPException(status_code=404, detail="Нет релевантных документов")
         return {"results": documents}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/rebuild")
+def search_endpoint():
+    try:
+        vb_rebuild()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
