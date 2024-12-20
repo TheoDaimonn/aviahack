@@ -1,8 +1,15 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, File, UploadFile
 from typing import List
+import os
 
-from vector_db import search_VB, dump_to_json, vb_rebuild
+from vector_db import search_VB, dump_to_json, vb_rebuild, INPUT_DIR
+
+
 app = FastAPI()
+
+if not os.path.exists(INPUT_DIR):
+    os.makedirs(INPUT_DIR)
+
 
 @app.get("/search")
 def search_endpoint(
@@ -19,9 +26,26 @@ def search_endpoint(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/rebuild")
-def search_endpoint():
+def rebuild_endpoint():
     try:
         vb_rebuild()
+        return {"message": "База данных успешно перестроена"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/upload-pdf")
+async def upload_pdf(file: UploadFile = File(...)):
+    try:
+        if not file.filename.endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="Загружаемый файл должен быть в формате PDF")
+
+        file_path = os.path.join(INPUT_DIR, file.filename)
+        with open(file_path, "wb") as buffer:
+            buffer.write(await file.read())
+
+        return {"message": f"Файл {file.filename} успешно загружен в {INPUT_DIR}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

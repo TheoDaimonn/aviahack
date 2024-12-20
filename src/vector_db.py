@@ -16,8 +16,8 @@ llm_client = OpenAI(
     base_url='http://localhost:8000/v1',
     api_key="EMPTY"
 )
-OUTPUT_DIR = 'output_docs'
-INPUT_DIR = 'input_docs'
+OUTPUT_DIR = '../output_docs'
+INPUT_DIR = '../input_docs'
 
 #model_name="deepvk/USER-bge-m3"
 model_name="sentence-transformers/paraphrase-xlm-r-multilingual-v1"
@@ -151,3 +151,7 @@ def dump_to_json(x: Document, i: int):
     x = x.model_dump()
     x['id'] = i
     return x
+
+if not os.path.isdir('../vector_database'):
+    print('no VB')
+    vb_rebuild()
