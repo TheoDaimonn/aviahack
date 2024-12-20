@@ -1,4 +1,6 @@
 from openai import OpenAI
+from langchain_ollama.llms import OllamaLLM
+
 import pandas as pd
 import re
 import os
@@ -10,17 +12,53 @@ from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain.docstore.document import Document
 from markitdown import MarkItDown
 import json
+import configparser
+from langchain.retrievers.multi_query import MultiQueryRetriever
+from langchain.prompts import PromptTemplate
+import langchain_openai
+import httpx
 
+
+prompt_template = """
+# Отвечай только на русском
+
+Твоя задача: написать 5 семантически схожих запросов, которые помогут получить наиболее релевантные документы в результате поиска.
+Каждый вопрос должен освещать различные аспекты оригинального запроса.
+
+Оригинальный запрос: {question}
+
+Варианты запроса:
+1. 
+2. 
+3. 
+4.
+5.
+"""
+
+prompt = PromptTemplate(
+    input_variables=["question"],
+    template=prompt_template
+)
+
+
+cfg = configparser.ConfigParser()
+cfg.read('/home/ivzarru/hacks/aviahack/src/config.ini')
+print(cfg.sections())
+model_name = cfg['MAIN_INFO']['model_name']
+llm_url = cfg['MAIN_INFO']['llm_url']
 
 llm_client = OpenAI(
-    base_url='http://localhost:8000/v1',
+    base_url=llm_url,
     api_key="EMPTY"
 )
-OUTPUT_DIR = '../output_docs'
-INPUT_DIR = '../input_docs'
+llm_model = OllamaLLM(
+    model="llama3",
+    base_url=llm_url  
+)
+OUTPUT_DIR = 'output_docs'
+INPUT_DIR = 'input_docs'
 
 #model_name="deepvk/USER-bge-m3"
-model_name="sentence-transformers/paraphrase-xlm-r-multilingual-v1"
 
 
 #model_kwargs = {'device': 'cuda:0'}
@@ -111,35 +149,29 @@ def VB_build(df):
         docstore=docstore,
         index_to_docstore_id=dict(zip(range(len(embeddings)), range(len(embeddings)))),
     )
-    vector_store.save_local('../vector_database/vector_database')
-    df.to_csv('../vector_database/docs_info.csv', index=False)
+    vector_store.save_local('vector_database/vector_database')
+    df.to_csv('vector_database/docs_info.csv', index=False)
 
     return vector_store
 
 def search_VB(query, k=10, threshold=0.87):
+    
     vector_store = FAISS.load_local(
-        '../vector_database/vector_database',
+        'vector_database/vector_database',
         embeddings=model,
         allow_dangerous_deserialization=True
     )
-    embedded_query = model.embed_query(query)
 
-    embedded_query = np.array(embedded_query).astype('float32')
-
-    faiss.normalize_L2(np.stack([embedded_query]))
-    results = []
-    best_score = -1
-    for doc, score in vector_store.similarity_search_with_score_by_vector(embedded_query, k=k, fetch_k=k * 5):
-        if best_score == -1:
-            best_score = score
-        if score < best_score * threshold:
-            break
-        print(score)
-        results.append(doc)
+    retriever_from_llm = MultiQueryRetriever.from_llm(
+    retriever=vector_store.as_retriever(), llm=llm_model, prompt=prompt
+)
+    results = retriever_from_llm.invoke(query)
+    print(results)
     return results
 
 def vb_increment(path_to_doc : str, path_vb : str):
     new_file_path = parse_pdf(path_to_doc)
+    # Допилить
     
 def vb_rebuild():
     parse_pdf()
@@ -152,6 +184,7 @@ def dump_to_json(x: Document, i: int):
     x['id'] = i
     return x
 
-if not os.path.isdir('../vector_database'):
+if not os.path.isdir('vector_database'):
     print('no VB')
     vb_rebuild()
+search_VB('Что делать если поломался транспортер?')
